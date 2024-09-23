@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime
+
 from typing import Awaitable, Callable, Optional, Union
 
 from livekit import rtc
@@ -90,25 +92,29 @@ class STTSegmentsForwarder:
         if ev.type == stt.SpeechEventType.INTERIM_TRANSCRIPT:
             # TODO(theomonnom): We always take the first alternative, we should mb expose opt to the
             # user?
+
+            unixtime = ev.alternatives[0].transcription_start.timestamp()
             text = ev.alternatives[0].text
             self._queue.put_nowait(
                 rtc.TranscriptionSegment(
                     id=self._current_id,
                     text=text,
-                    start_time=0,
-                    end_time=0,
+                    start_time= int(unixtime * 1000) + int(ev.alternatives[0].start_time * 1000),
+                    end_time= int(unixtime * 1000) + int(ev.alternatives[0].end_time * 1000),
                     final=False,
                     language="",  # TODO
                 )
             )
         elif ev.type == stt.SpeechEventType.FINAL_TRANSCRIPT:
+            unixtime = ev.alternatives[0].transcription_start.timestamp()
+           
             text = ev.alternatives[0].text
             self._queue.put_nowait(
                 rtc.TranscriptionSegment(
                     id=self._current_id,
                     text=text,
-                    start_time=0,
-                    end_time=0,
+                    start_time= int(unixtime * 1000) + int(ev.alternatives[0].start_time * 1000),
+                    end_time= int(unixtime * 1000) + int(ev.alternatives[0].end_time * 1000),
                     final=True,
                     language="",  # TODO
                 )

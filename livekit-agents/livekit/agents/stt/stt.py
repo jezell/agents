@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, unique
 from typing import AsyncIterator, List, Union
-
+import datetime
 from livekit import rtc
 
 from ..utils import AudioBuffer, aio
@@ -27,6 +27,7 @@ class SpeechEventType(str, Enum):
 
 @dataclass
 class SpeechData:
+    transcription_start: datetime.datetime
     language: str
     text: str
     start_time: float = 0.0

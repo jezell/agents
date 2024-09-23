@@ -23,6 +23,8 @@ import wave
 from dataclasses import dataclass
 from typing import List, Tuple
 from urllib.parse import urlencode
+import ctypes
+import datetime
 
 import aiohttp
 from livekit.agents import stt, utils
@@ -151,6 +153,13 @@ class STT(stt.STT):
 
         data = io_buffer.getvalue()
 
+        frames = wav.getnframes()
+        rate = wav.getframerate()
+        duration = frames / float(rate)
+
+        buffer_start = datetime.datetime.now(datetime.timezone.utc)
+        buffer_start -= datetime.timedelta(seconds=duration) 
+
         async with self._ensure_session().post(
             url=_to_deepgram_url(recognize_config),
             data=data,
@@ -161,6 +170,7 @@ class STT(stt.STT):
             },
         ) as res:
             return prerecorded_transcription_to_speech_event(
+                buffer_start,
                 config.language, await res.json()
             )
 
@@ -196,6 +206,9 @@ class SpeechStream(stt.SpeechStream):
         if opts.detect_language and opts.language is None:
             raise ValueError("language detection is not supported in streaming mode")
 
+        self._stream_start = datetime.datetime.now(datetime.timezone.utc)
+        self._submitted_frames = float(0)
+        self._drift = 0
         self._opts = opts
         self._api_key = api_key
         self._session = http_session
@@ -288,17 +301,27 @@ class SpeechStream(stt.SpeechStream):
                 num_channels=self._opts.num_channels,
                 samples_per_channel=samples_100ms,
             )
-
-            async for data in self._input_ch:
+           
+            async for data in self._input_ch:                
                 if isinstance(data, self._FlushSentinel):
                     frames = audio_bstream.flush()
                 else:
-                    frames = audio_bstream.write(data.data.tobytes())
+
+                    bytes = data.data.tobytes()
+                    self._submitted_frames += float(len(bytes) / (self._opts.num_channels * ctypes.sizeof(ctypes.c_int16)))
+                
+                    frames = audio_bstream.write(bytes)
+
+                submitted_duration =  self._submitted_frames / float(self._opts.sample_rate)
+               
+                offset = datetime.datetime.now(datetime.timezone.utc).timestamp() - self._stream_start.timestamp()
+                self._drift = offset - submitted_duration
 
                 for frame in frames:
-                    has_audio = self._audio_energy_filter.push_frame(frame)
-                    if has_audio:
-                        await ws.send_bytes(frame.data.tobytes())
+                    # dropping out frames with the energy filter causes timestamps to drift, could maybe adjust with _drift param
+                    #has_audio = self._audio_energy_filter.push_frame(frame)
+                    #if has_audio:
+                    await ws.send_bytes(frame.data.tobytes())
 
             # tell deepgram we are done sending audio/inputs
             closing_ws = True
@@ -325,9 +348,10 @@ class SpeechStream(stt.SpeechStream):
 
                 try:
                     self._process_stream_event(json.loads(msg.data))
-                except Exception:
-                    logger.exception("failed to process deepgram message")
+                except Exception as e:
+                    logger.exception("failed to process deepgram message", exc_info=e)
 
+       
         tasks = [
             asyncio.create_task(send_task()),
             asyncio.create_task(recv_task()),
@@ -361,7 +385,7 @@ class SpeechStream(stt.SpeechStream):
             is_final_transcript = data["is_final"]
             is_endpoint = data["speech_final"]
 
-            alts = live_transcription_to_speech_data(self._opts.language, data)
+            alts = live_transcription_to_speech_data(self._stream_start, self._opts.language, data)
             # If, for some reason, we didn't get a SpeechStarted event but we got
             # a transcript with text, we should start speaking. It's rare but has
             # been observed.
@@ -400,15 +424,19 @@ class SpeechStream(stt.SpeechStream):
 
 
 def live_transcription_to_speech_data(
+    start: datetime.datetime,
     language: str, data: dict
 ) -> List[stt.SpeechData]:
+    
     dg_alts = data["channel"]["alternatives"]
+
 
     return [
         stt.SpeechData(
+            transcription_start=start,
             language=language,
-            start_time=alt["words"][0]["start"] if alt["words"] else 0,
-            end_time=alt["words"][-1]["end"] if alt["words"] else 0,
+            start_time=  (alt["words"][0]["start"] if alt["words"] else 0),
+            end_time=  (alt["words"][-1]["end"] if alt["words"] else 0),
             confidence=alt["confidence"],
             text=alt["transcript"],
         )
@@ -417,6 +445,7 @@ def live_transcription_to_speech_data(
 
 
 def prerecorded_transcription_to_speech_event(
+    transcript_start: datetime.datetime,
     language: str | None,  # language should be None when 'detect_language' is enabled
     data: dict,
 ) -> stt.SpeechEvent:
@@ -429,9 +458,11 @@ def prerecorded_transcription_to_speech_event(
     detected_language = channel.get("detected_language")
 
     return stt.SpeechEvent(
+        transcript_start=transcript_start,
         type=stt.SpeechEventType.FINAL_TRANSCRIPT,
         alternatives=[
             stt.SpeechData(
+                transcription_start=transcript_start,
                 language=language or detected_language,
                 start_time=alt["words"][0]["start"] if alt["words"] else 0,
                 end_time=alt["words"][-1]["end"] if alt["words"] else 0,

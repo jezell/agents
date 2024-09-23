@@ -115,6 +115,7 @@ def ai_callable(
 
 class FunctionContext:
     def __init__(self) -> None:
+        self._context = dict[str, Any]()
         self._fncs = dict[str, FunctionInfo]()
 
         for _, member in inspect.getmembers(self, predicate=inspect.ismethod):
@@ -197,6 +198,10 @@ class FunctionContext:
             callable=fnc,
             arguments=args,
         )
+
+    @property
+    def context(self) -> dict[str, Any]:
+        return self._context
 
     @property
     def ai_functions(self) -> dict[str, FunctionInfo]:

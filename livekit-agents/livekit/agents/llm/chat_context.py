@@ -47,7 +47,7 @@ class ChatMessage:
     @staticmethod
     def create_tool_from_called_function(
         called_function: function_context.CalledFunction,
-    ) -> "ChatMessage":
+    ) -> list[ChatMessage]:
         if not called_function.task.done():
             raise ValueError("cannot create a tool result from a running ai function")
 
@@ -59,13 +59,40 @@ class ChatMessage:
                 tool_exception = e
             content = f"Error: {e}"
 
-        return ChatMessage(
-            role="tool",
-            name=called_function.call_info.function_info.name,
-            content=content,
-            tool_call_id=called_function.call_info.tool_call_id,
-            tool_exception=tool_exception,
-        )
+        if content.__class__ is str:
+            return [ 
+                ChatMessage(
+                    role="tool",
+                    name=called_function.call_info.function_info.name,
+                    content=content,
+                    tool_call_id=called_function.call_info.tool_call_id,
+                    tool_exception=tool_exception,
+                ) ]
+        
+        else:
+            return [ 
+                ChatMessage(
+                    role="tool",
+                    name=called_function.call_info.function_info.name,
+                    content="the assistant will fetch it for you",
+                    tool_call_id=called_function.call_info.tool_call_id,
+                    tool_exception=tool_exception,
+                ), 
+                ChatMessage(
+                    role="assistant",
+                    content="please send the image",
+                ),                 
+                ChatMessage(
+                    role="user",
+                    content=content[0],
+                ), 
+                ChatMessage(
+                    role="user",
+                    content="here is the image, but keep in mind the image is always being updated, so fetch it again if I ask you to about it again"
+                )
+                
+                ]
+
 
     @staticmethod
     def create_tool_calls(

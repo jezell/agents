@@ -455,7 +455,7 @@ def _synthesize_url(opts: _TTSOptions) -> str:
     latency = opts.streaming_latency
     return (
         f"{base_url}/text-to-speech/{voice_id}/stream?"
-        f"model_id={model_id}&output_format={output_format}&optimize_streaming_latency={latency}"
+        f"model_id={model_id}&output_format={output_format}"
     )
 
 
@@ -468,6 +468,6 @@ def _stream_url(opts: _TTSOptions) -> str:
     enable_ssml = str(opts.enable_ssml_parsing).lower()
     return (
         f"{base_url}/text-to-speech/{voice_id}/stream-input?"
-        f"model_id={model_id}&output_format={output_format}&optimize_streaming_latency={latency}&"
+        f"model_id={model_id}&output_format={output_format}&"
         f"enable_ssml_parsing={enable_ssml}"
     )

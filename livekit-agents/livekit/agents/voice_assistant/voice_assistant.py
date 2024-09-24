@@ -506,6 +506,19 @@ class VoiceAssistant(utils.EventEmitter[EventTypes]):
 
             self._speech_q_changed.clear()
 
+    async def replyTo(self, message: str) -> None:
+        new_transcript = message
+        self._transcribed_text += (
+            " " if self._transcribed_text else ""
+        ) + new_transcript
+
+        if self._opts.preemptive_synthesis:
+            self._synthesize_agent_reply()
+
+        self._deferred_validation.on_human_final_transcript(new_transcript)
+        
+        self._interrupt_if_possible()
+
     def _synthesize_agent_reply(self) -> None:
         """Synthesize the agent reply to the user question, also make sure only one reply
         is synthesized/played at a time"""

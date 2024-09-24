@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime
 import time
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional, Union
@@ -295,7 +296,7 @@ class TTSSegmentsForwarder:
                     await self._sleep_if_not_closed(0.125)
 
                 sentence_stream = text_data.sentence_stream
-                forward_start_time = time.time()
+                forward_start_time = datetime.datetime.now(datetime.timezone.utc).timestamp()
 
                 async for ev in sentence_stream:
                     await self._sync_sentence_co(
@@ -353,7 +354,7 @@ class TTSSegmentsForwarder:
             processed_words.append(word)
 
             # elapsed time since the start of the seg
-            elapsed_time = time.time() - segment_start_time
+            elapsed_time = datetime.datetime.now(datetime.timezone.utc).timestamp() - segment_start_time
             text = self._opts.word_tokenizer.format_words(processed_words)
 
             # remove any punctuation at the end of a non-final transcript
@@ -381,8 +382,8 @@ class TTSSegmentsForwarder:
                 rtc.TranscriptionSegment(
                     id=seg_id,
                     text=text,
-                    start_time=0,
-                    end_time=0,
+                    start_time=int(segment_start_time * 1000),
+                    end_time=int(segment_start_time * 1000) + int(audio_data.pushed_duration * 1000),
                     final=False,
                     language=self._opts.language,
                 )
@@ -396,8 +397,8 @@ class TTSSegmentsForwarder:
             rtc.TranscriptionSegment(
                 id=seg_id,
                 text=sentence,
-                start_time=0,
-                end_time=0,
+                start_time=int(segment_start_time * 1000),
+                end_time=int(segment_start_time * 1000) + int(audio_data.pushed_duration * 1000),
                 final=True,
                 language=self._opts.language,
             )

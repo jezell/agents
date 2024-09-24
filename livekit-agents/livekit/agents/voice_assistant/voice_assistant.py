@@ -301,7 +301,8 @@ class VoiceAssistant(utils.EventEmitter[EventTypes]):
             # no participant provided, try to find the first participant in the room
             for participant in self._room.remote_participants.values():
                 self._link_participant(participant.identity)
-                break
+                if self._human_input is not None:
+                    break
 
         self._main_atask = asyncio.create_task(self._main_task())
 
@@ -374,6 +375,7 @@ class VoiceAssistant(utils.EventEmitter[EventTypes]):
         await self._deferred_validation.aclose()
 
     def _on_participant_connected(self, participant: rtc.RemoteParticipant):
+            
         if self._human_input is not None:
             return
 
@@ -385,6 +387,7 @@ class VoiceAssistant(utils.EventEmitter[EventTypes]):
             logger.error("_link_participant must be called with a valid identity")
             return
 
+
         self._human_input = HumanInput(
             room=self._room,
             vad=self._vad,
@@ -392,6 +395,9 @@ class VoiceAssistant(utils.EventEmitter[EventTypes]):
             participant=participant,
             transcription=self._opts.transcription.user_transcription,
         )
+
+        if self.fnc_ctx != None:
+            self.fnc_ctx.context["participant"] = participant
 
         def _on_start_of_speech(ev: vad.VADEvent) -> None:
             self._plotter.plot_event("user_started_speaking")
@@ -693,9 +699,10 @@ class VoiceAssistant(utils.EventEmitter[EventTypes]):
                     continue
 
                 tool_calls.append(called_fnc.call_info)
-                tool_calls_results_msg.append(
-                    ChatMessage.create_tool_from_called_function(called_fnc)
-                )
+                for message in ChatMessage.create_tool_from_called_function(called_fnc):
+                    tool_calls_results_msg.append(
+                        message
+                    )
 
             if tool_calls:
                 extra_tools_messages.append(ChatMessage.create_tool_calls(tool_calls))

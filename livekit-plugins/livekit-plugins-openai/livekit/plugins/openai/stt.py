@@ -26,6 +26,7 @@ from livekit.agents import stt
 from livekit.agents.utils import AudioBuffer
 
 import openai
+import datetime
 
 from .models import WhisperModels
 
@@ -110,7 +111,15 @@ class STT(stt.STT):
             response_format="json",
         )
 
+        # compute start of buffer from current time + length
+        frames = wav.getnframes()
+        rate = wav.getframerate()
+        duration = frames / float(rate)
+
+        buffer_start = datetime.datetime.now(datetime.timezone.utc)
+        buffer_start -= datetime.timedelta(seconds=duration) 
+
         return stt.SpeechEvent(
             type=stt.SpeechEventType.FINAL_TRANSCRIPT,
-            alternatives=[stt.SpeechData(text=resp.text, language=language or "")],
+            alternatives=[stt.SpeechData(transcript_start=buffer_start, text=resp.text, language=language or "")],
         )

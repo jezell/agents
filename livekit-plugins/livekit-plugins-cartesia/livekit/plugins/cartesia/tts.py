@@ -136,7 +136,7 @@ class ChunkedStream(tts.ChunkedStream):
         request_id, segment_id = utils.shortuuid(), utils.shortuuid()
 
         data = _to_cartesia_options(self._opts)
-        data["transcript"] = self._text
+        data["transcript"] = self._text.replace("*","") 
 
         async with self._session.post(
             "https://api.cartesia.ai/tts/bytes",
@@ -209,7 +209,7 @@ class SynthesizeStream(tts.SynthesizeStream):
             async for ev in self._sent_tokenizer_stream:
                 token_pkt = base_pkt.copy()
                 token_pkt["context_id"] = request_id
-                token_pkt["transcript"] = ev.token + " "
+                token_pkt["transcript"] = ev.token.replace("*","") + " "
                 token_pkt["continue"] = True
                 await ws.send_str(json.dumps(token_pkt))
 
@@ -285,6 +285,7 @@ class SynthesizeStream(tts.SynthesizeStream):
         try:
             await asyncio.gather(*tasks)
         finally:
+            await ws.close()
             await utils.aio.gracefully_cancel(*tasks)
 
 

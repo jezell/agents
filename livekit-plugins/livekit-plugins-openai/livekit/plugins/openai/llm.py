@@ -22,6 +22,8 @@ from typing import Any, Awaitable, MutableSet
 import httpx
 from livekit.agents import llm
 
+import httpcore
+
 import openai
 from openai.types.chat import ChatCompletionChunk, ChatCompletionMessageParam
 from openai.types.chat.chat_completion_chunk import Choice
@@ -73,7 +75,7 @@ class LLM(llm.LLM):
             api_key=api_key,
             base_url=base_url,
             http_client=httpx.AsyncClient(
-                timeout=httpx.Timeout(timeout=30, connect=10, read=5, pool=5),
+                timeout=httpx.Timeout(timeout=30, connect=30, read=30, pool=30),
                 follow_redirects=True,
                 limits=httpx.Limits(
                     max_connections=1000,
